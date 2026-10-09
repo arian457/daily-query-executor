@@ -1,0 +1,89 @@
+spring:
+  application:
+    name: dqe
+  cloud:
+    aws:
+      region:
+        static: us-east-1
+      credentials:
+        access-key: test
+        secret-key: test
+      endpoint: ${AWS_ENDPOINT:http://localhost:4566}
+      s3:
+        path-style-access-enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/dqe}
+    username: dqe_ro
+    password: dqe_ro
+  task:
+    scheduling:
+      pool:
+        size: 2
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,metrics
+  health:
+    db:
+      enabled: false
+
+logging:
+  level:
+    com.arian.dqe: INFO
+    io.awspring.cloud.sqs: WARN
+
+app:
+  api:
+    base-url: ${API_BASE_URL:http://localhost:8080}
+    timeout-seconds: 29
+    endpoint-allowlist: "^/providers/[a-z0-9-]+/records/[0-9]+$"
+  queues:
+    tasks: tasks.fifo
+    dlq: tasks-dlq.fifo
+    retry: retry
+    visibility-seconds: ${VISIBILITY_SECONDS:60}
+    max-receive-count: 5
+  tables:
+    plan: plan
+    execution: execution
+    breaker: breaker
+  bucket: results
+  loader:
+    cron: ${LOADER_CRON:0 0 * * * *}
+    slots: 22
+  retry:
+    max-attempts: 4
+    base-seconds: ${RETRY_BASE_SECONDS:30}
+    cap-seconds: 900
+  breaker:
+    provider-threshold: 5
+    provider-pause-seconds: ${BREAKER_PAUSE_SECONDS:120}
+    provider-max-pause-seconds: 1800
+    global-fail-ratio: 0.5
+    global-min-providers: 3
+    global-min-samples: 20
+    global-window-seconds: 120
+    global-probe-seconds: 30
+  ssm:
+    global-breaker: /dqe/breaker/global
+    max-concurrent: /dqe/limits/max-concurrent-providers
+    rate: /dqe/limits/rate-per-s
+  limits:
+    max-concurrent-providers: ${MAX_CONCURRENT_PROVIDERS:10}
+    rate-per-second: ${RATE_PER_SECOND:5}
+  mockapi:
+    min-latency-ms: ${MOCK_MIN_LATENCY_MS:100}
+    max-latency-ms: ${MOCK_MAX_LATENCY_MS:500}
+    retry-after-seconds: ${MOCK_RETRY_AFTER_SECONDS:10}
+    faults:
+      p-013: 500
+      p-027: 429
+      p-042: 404
+  mask-fields:
+    - taxId
+    - email
