@@ -1,0 +1,71 @@
+# Demo local del "Ejecutor diario de consultas". Una imagen, cuatro perfiles.
+# La "hora" se comprime a 1 minuto (LOADER_CRON) para ver el día completo en ~25 min.
+x-app: &app
+  build: .
+  depends_on:
+    localstack:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+  environment: &app-env
+    AWS_ENDPOINT: http://localstack:4566
+    DB_URL: jdbc:postgresql://postgres:5432/dqe
+    API_BASE_URL: http://mockapi:8080
+
+services:
+  localstack:
+    image: localstack/localstack:4
+    environment:
+      SERVICES: sqs,dynamodb,s3,ssm
+    ports:
+      - "4566:4566"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dqe
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dqe"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mockapi:
+    <<: *app
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: mockapi
+    ports:
+      - "8080:8080"
+
+  loader:
+    <<: *app
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: loader
+      LOADER_CRON: "0 * * * * *"
+
+  worker:
+    <<: *app
+    scale: 2
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: worker
+      RETRY_BASE_SECONDS: "5"
+      BREAKER_PAUSE_SECONDS: "20"
+
+  reinjector:
+    <<: *app
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: reinjector
